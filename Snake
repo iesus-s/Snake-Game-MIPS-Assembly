@@ -1,0 +1,228 @@
+## Author: Jesus Sandoval 
+## Date: 05/02/2022
+## Project _ Snake_Bonanza
+.data 
+
+.eqv Blue, 0x0000ffff			# snake color
+.eqv Green, 0x00FF00		# food color
+.eqv White, 0xFFFFFF		# wall color
+.eqv UP, 119
+.eqv RIGHT, 100
+.eqv DOWN, 115
+.eqv LEFT, 97
+.eqv gameSize, 64
+.text 
+############### draw border function #################
+border:
+	li 	$t2, 0				# i = 0
+	li 	$t3, gameSize
+	li 	$t0, 0x10008000	
+	li 	$t1,Blue			
+	
+topBorder:
+	beq 		$t2, $t3, sideBorder	# for ( i < topRight )
+	sw 		$t1, ($t0)			# print(blue)
+	addi 		$t0, $t0, 4			# else
+	addi 		$t2, $t2, 1			# branch to sideBorder
+	j	 topBorder
+	
+sideBorder: 
+	li 	$t2, 0				# reset i = 0
+	li 	$t3, 62			
+sideBegin:
+	beq		$t2, $t3, botBorder	# for (i < bottom)
+	sw 		$t1, ($t0)			# printleft(blue)
+	addi 		$t0, $t0, 252		# printright(blue)
+	sw		$t1, ($t0)			# else
+	addi 		$t0, $t0, 4			# branch to botBorder
+	addi 		$t2, $t2, 1			# i++
+	j 	sideBegin
+	
+botBorder:
+	li 	$t2, 0				# reset
+	li 	$t3, gameSize			# new $t3 for bottom
+botBegin:
+	beq 		$t2, $t3, reset
+	sw 		$t1, ($t0)
+	addi 		$t2, $t2, 1			# i++
+	addi 		$t0, $t0, 4
+	j 	botBegin
+	
+############## reset registers ########################
+reset:
+	li 	$t0, 0
+	li 	$t1, 0
+	li 	$t2, 0
+	li 	$t3, 0
+	li 	$t4, 0
+	li 	$t5, 0
+	li 	$t6, 0
+	li 	$t7, 0
+	li 	$t8, 0
+	li 	$t9, 0
+	li 	$s0, 0
+	li 	$s1, 0
+	li 	$s2, 0
+	li 	$s3, 0
+	li 	$s4, 0
+	li 	$s5, 0
+	li 	$s6, 0
+	li 	$s7, 0
+
+###############################################
+begin:
+	li 	$t0, 0x10008000	# bitmap start address
+	li 	$t1, Blue			# $t1 = snake 
+	li 	$t4, 0			# $t4 = background
+	li 	$t5, Green		# $t5 = food 
+	li 	$t7, 0			# holds value of input
+	addi 	$s1, $zero, 10				# speed
+	li 	$s3, 0			# used to check if food 
+	li 	$s5, White		# wall
+	li	$t8, 0xFF0000		# red for speed item 
+	li 	$t2, 0x1000A080	# center of bitmap
+	sw 	$t1, ($t2)			# snake spawns here 
+	li 	$t3, 0			# reserved to check snake position
+	li 	$s2, 5			# initial snake length
+
+################## Random Speed Item ####################
+	li 	$a1, 1024			# possible values
+	li 	$v0, 42			# speed location = rand();
+	syscall
+	move 	$t6, $a0		# $t6 hold speed location
+	mul 	$t6, $t6, 16		# multiplier to stay in range of bitmap 
+	add 	$t6, $t6, $t0		# from base address
+	sw 	$t8, ($t6)			# places random speed item
+	
+################## Random food ########################
+randomFood: 
+	jal randomWall
+	li 	$a1, 1024			# possible values 
+	li 	$v0, 42			# food location = rand();
+	syscall
+	move 	$s4, $a0		# $t6 hold fruit location
+	mul 	$s4, $s4, 16		# multiplier to stay in range of bitmap 
+	add 	$s4, $s4, $t0		# from base address
+	sw 	$t5, ($s4)			# places random location for food 
+	j check
+	
+################## Random wall ########################
+stackreturn: 
+	lw $ra, ($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
+randomWall: 
+	li 	$a1, 1024			# possible values
+	li 	$v0, 42			# wall location = rand();
+	syscall
+	move 	$t6, $a0		# $t6 hold wall location
+	mul 	$t6, $t6, 16		# multiplier to stay in range of bitmap 
+	add 	$t6, $t6, $t0		# from base address
+	sw 	$s5, ($t6)			# places random wall
+	addi $sp, $sp, -4
+	sw $ra, ($sp)
+	jal stackreturn
+	
+################## Checks for key input ###############
+check: 
+	lw 	$t9, 0xffff0004		# key input
+	li 	$v0, 32
+	li 	$a0, 50			
+	syscall
+	
+decision:
+	beq 	$t9, UP, snakeUp
+	beq 	$t9, RIGHT, snakeRight	# case (condition)
+	beq 	$t9, DOWN, snakeDown
+	beq 	$t9, LEFT, snakeLeft
+	beq 	$t7, UP, snakeUp
+	beq 	$t7, RIGHT, snakeRight
+	beq 	$t7, DOWN, snakeDown
+	beq 	$t7, LEFT, snakeLeft
+	beq 	$t9, $zero, check
+	beq 	$t7, $zero, check
+
+snakeUp: 
+	li 	$s3, 0			
+	li 	$t7, UP			# hold condition for check loop
+	add 	$t3, $t2, $zero		# save current location
+	lw	$s3, -256($t2)		# get next location
+	beq 	$s3, $s5, end		# if wall - do
+	addi 	$t2, $t2, -256		
+	sw	$t1, ($t2)			# move
+	sw 	$t4, ($t3)			
+	beq 	$s3, $t5, eatFood	# if foodood - do
+	beq  $s3, $t8, upSpeed	# if speed - do
+	li 	$v0, 32		
+	add 	$a0, $zero, $s1 	# speed 
+	syscall
+	j check	
+	
+snakeRight:
+	li 	$s3, 0			
+	li 	$t7, RIGHT		# hold condition for check loop
+	add 	$t3, $t2, $zero		# save current location
+	lw 	$s3, 4($t2)		# get next location
+	beq 	$s3, $s5, end		# if wall - do
+	addi 	$t2, $t2, 4
+	sw 	$t1, ($t2)			# move 
+	sw 	$t4, ($t3)
+	beq 	$s3, $t5, eatFood	# if food - do
+	beq  $s3, $t8, upSpeed	# if speed - do
+	li 	$v0, 32
+	add 	$a0, $zero, $s1		# speed
+	syscall
+	j check
+	
+snakeDown: 
+	li 	$s3, 0			
+	li 	$t7, DOWN		# hold condition for check loop
+	add 	$t3, $t2, $zero		# save current location
+	lw 	$s3, 256($t2)		# get next location
+	beq 	$s3, $s5, end		# if wall - do
+	addi 	$t2, $t2, 256
+	sw 	$t1, ($t2)			# move
+	sw 	$t4, ($t3)
+	beq 	$s3, $t5, eatFood	# if food - do
+	beq  $s3, $t8, upSpeed	# if speed - do
+	li 	$v0, 32
+	add 	$a0, $zero, $s1		# speed
+	syscall
+	j check
+
+snakeLeft:
+	li 	$s3, 0			
+	li 	$t7, LEFT			# hold condition for check loop
+	add 	$t3, $t2, $zero		# save current location
+	lw 	$s3, -4($t2)		# get next location
+	beq 	$s3, $s5, end		# if wall - do
+	addi 	$t2, $t2, -4
+	sw 	$t1, ($t2)			# move
+	sw 	$t4, ($t3)
+	beq 	$s3, $t5, eatFood	# if food - do
+	beq  	$s3, $t8, upSpeed	# if speed - do
+	li 	$v0, 32
+	add 	$a0, $zero, $s1		# speed
+	syscall
+	j check
+	
+eatFood: 
+	j randomFood
+	
+################# Random Speed Item ######################
+upSpeed:
+	addi 	$s1, $s1, -5
+	li 	$a1, 1024			# possible values
+	li 	$v0, 42
+	syscall
+	move 	$t6, $a0		# $t6 hold speed location
+	mul 	$t6, $t6, 16		# multiplier to stay in range of bitmap 
+	add 	$t6, $t6, $t0		# from base address
+	sw 		$t8, ($t6)			# places random speed item
+	j check
+
+end: 	
+	li 	$v0, 10
+	syscall 
+	
